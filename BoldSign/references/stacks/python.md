@@ -19,13 +19,13 @@ import os
 
 # API Key auth
 configuration = boldsign.Configuration(
-    api_key={'X-API-KEY': os.environ['BOLDSIGN_API_KEY']}
+    api_key=os.environ['BOLDSIGN_API_KEY']
 )
 
 # EU region
 configuration = boldsign.Configuration(
     host='https://eu-api.boldsign.com',
-    api_key={'X-API-KEY': os.environ['BOLDSIGN_API_KEY']}
+    api_key=os.environ['BOLDSIGN_API_KEY']
 )
 
 # OAuth Bearer Token
@@ -64,14 +64,13 @@ def send_document():
         form_fields=[signature_field]
     )
 
-    with open('contract.pdf', 'rb') as f:
-        send_request = SendForSign(
-            title='Service Agreement',
-            message='Please sign this agreement.',
-            signers=[signer],
-            files=[f]
-        )
-        result = document_api.send_document(send_request)
+    send_request = SendForSign(
+        title='Service Agreement',
+        message='Please sign this agreement.',
+        signers=[signer],
+        files=['contract.pdf']
+    )
+    result = document_api.send_document(send_request)
 
     print(f'Document ID: {result.document_id}')
     # NOTE: Async — listen for webhooks to confirm Sent status
@@ -92,13 +91,8 @@ def send_from_template(template_id: str):
         signer_email='jane@example.com'
     )
 
-    send_request = SendForSignFromTemplate(
-        template_id=template_id,
-        title='Contract for Jane',
-        roles=[role]
-    )
-
-    result = template_api.send_using_template(send_request)
+    send_request = SendForSignFromTemplate(roles=[role])
+    result = template_api.send_using_template(template_id=template_id, send_for_sign_from_template_form=send_request)
     return result.document_id
 ```
 
@@ -208,7 +202,7 @@ async def boldsign_webhook(request: Request):
 
 ```python
 def get_document_status(document_id: str):
-    details = document_api.get_document_properties(document_id=document_id)
+    details = document_api.get_properties(document_id=document_id)
     print(f'Status: {details.status}')  # InProgress, Completed, Declined, Expired
     return details
 ```
@@ -235,12 +229,11 @@ def onboard_tenant(name: str, email: str):
     # Tenant clicks Approve in email → SenderIdentityApproved webhook fires
 
 def send_on_behalf_of(tenant_email: str, title: str, signer, file_path: str):
-    with open(file_path, 'rb') as f:
         request = SendForSign(
             on_behalf_of=tenant_email,  # ← key field
             title=title,
             signers=[signer],
-            files=[f]
+            files=["YOUR_FILE_PATH"]
         )
         return document_api.send_document(request)
 ```
