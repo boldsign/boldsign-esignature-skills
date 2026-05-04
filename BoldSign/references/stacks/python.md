@@ -73,7 +73,7 @@ def send_document():
         send_for_sign=send_for_sign
     )
 
-    return response.documentId
+    return response.document_id
 ```
 
 ---
@@ -98,7 +98,7 @@ def send_from_template(template_id: str):
         send_for_sign_from_template_form=request
     )
 
-    return response.documentId
+    return response.document_id
 ```
 
 ---
@@ -108,13 +108,13 @@ def send_from_template(template_id: str):
 from datetime import datetime, timedelta
 
 def get_embedded_signing_link(document_id: str, signer_email: str) -> str:
-    response = document_api.get_embedded_signing_link(
+    response = document_api.get_embedded_sign_link(
         document_id=document_id,
         signer_email=signer_email,
         redirect_url="https://yourapp.com/signing-complete",
         sign_link_valid_till=datetime.utcnow() + timedelta(hours=24)
     )
-    return response.signLink
+    return response
 ```
 
 ---
