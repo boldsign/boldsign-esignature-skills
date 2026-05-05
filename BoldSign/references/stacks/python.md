@@ -133,15 +133,22 @@ def boldsign_webhook():
     signature_header = request.headers.get("X-BoldSign-Signature", "")
     raw_body = request.data.decode("utf-8")
 
-    if not verify_signature(signature_header, raw_body):
-        abort(401)
-
     payload = request.json
     event_type = payload["event"]["eventType"]
     document_id = payload["document"]["documentId"]
+    if event_type == "Verification":
+        return "OK", 200
+
+    signature_header = request.headers.get("X-BoldSign-Signature", "")
+    if not verify_signature(signature_header, raw_body):
+        abort(401)
 
     if event_type == "Completed":
         handle_completed(document_id)
+    elif event_type == "SendFailed":
+        print(f'Send failed: {payload["document"]}')
+    elif event_type == "Declined":
+        print(f'Declined: {document_id}')
 
     return "OK", 200
 ```
