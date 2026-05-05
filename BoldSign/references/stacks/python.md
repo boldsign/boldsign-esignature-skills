@@ -190,3 +190,58 @@ def get_document_status(document_id: str):
 ```
 
 ---
+
+## 9. Sender Identity — Register and Send on Behalf of Tenant
+
+```python
+from boldsign.api import SenderIdentitiesApi
+from boldsign.models import CreateSenderIdentityRequest, ResendSenderIdentityRequest
+
+sender_api = SenderIdentitiesApi(api_client)
+
+def onboard_tenant(name: str, email: str):
+    # Step 1: Register identity
+    sender_api.create_sender_identities(
+        CreateSenderIdentityRequest(name=name, email=email)
+    )
+    # Step 2: Send approval email to tenant
+    sender_api.request_for_identity_approval(
+        ResendSenderIdentityRequest(email=email)
+    )
+    # Tenant clicks Approve in email → SenderIdentityApproved webhook fires
+
+def send_on_behalf_of(tenant_email: str, title: str, signer, file_path: str):
+        request = SendForSign(
+            on_behalf_of=tenant_email,  # ← key field
+            title=title,
+            signers=[signer],
+            files=["YOUR_FILE_PATH"]
+        )
+        return document_api.send_document(request)
+```
+
+---
+
+## 10. Rate Limit Handling
+
+```python
+import time
+
+def call_with_retry(fn, max_retries=1):
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if hasattr(e, 'status') and e.status == 429:
+                retry_after = int(getattr(e, 'headers', {}).get('retry-after', 60))
+                print(f"Rate limit hit. Waiting {retry_after}s")
+                time.sleep(retry_after)
+            else:
+                raise
+    raise Exception("Max retries exceeded")
+```
+
+**Sandbox: 50 req/hour. Production: 2,000 req/hour (account-level).**  
+Use webhooks — not polling — to avoid burning your quota.
+
+---
