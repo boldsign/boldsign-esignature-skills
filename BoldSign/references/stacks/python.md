@@ -1,6 +1,5 @@
 # BoldSign — Python Integration Reference
 
-**SDK Version:** `boldsign` v3.1.x  
 **Docs:** https://developers.boldsign.com/sdks/python-sdk/  
 **PyPI:** https://pypi.org/project/boldsign/
 
