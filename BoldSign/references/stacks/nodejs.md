@@ -26,7 +26,7 @@ documentApi.setApiKey(process.env.BOLDSIGN_API_KEY!);
 documentApi.setAccessToken(process.env.BOLDSIGN_ACCESS_TOKEN!);
 
 // EU region — set base path
-documentApi.basePath = 'https://eu-api.boldsign.com';
+documentApi.basePath = 'https://api-eu.boldsign.com';
 ```
 
 ---

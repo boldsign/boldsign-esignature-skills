@@ -24,7 +24,7 @@ configuration = boldsign.Configuration(
 
 # EU region
 configuration = boldsign.Configuration(
-    host='https://eu-api.boldsign.com',
+    host='https://api-eu.boldsign.com',
     api_key=os.environ['BOLDSIGN_API_KEY']
 )
 
