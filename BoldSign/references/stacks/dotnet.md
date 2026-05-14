@@ -23,7 +23,7 @@ using BoldSign.Model;
 var apiClient = new ApiClient("https://api.boldsign.com", "YOUR_API_KEY");
 
 // EU region
-var apiClient = new ApiClient("https://eu-api.boldsign.com", "YOUR_API_KEY");
+var apiClient = new ApiClient("https://api-eu.boldsign.com", "YOUR_API_KEY");
 
 // OAuth Bearer Token
 var configuration = new Configuration();
