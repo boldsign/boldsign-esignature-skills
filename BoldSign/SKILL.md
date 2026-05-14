@@ -12,9 +12,9 @@ Node.js, TypeScript, Python, .NET/C#, and PHP.
 
 **Live Docs:** https://developers.boldsign.com  
 **API Base URL (US):** `https://api.boldsign.com`  
-**API Base URL (EU):** `https://eu-api.boldsign.com`   
-**API Base URL (CA):** `https://ca-api.boldsign.com`   
-**API Base URL (AU):** `https://au-api.boldsign.com`    
+**API Base URL (EU):** `https://api-eu.boldsign.com`   
+**API Base URL (CA):** `https://api-ca.boldsign.com`   
+**API Base URL (AU):** `https://api-au.boldsign.com`    
 
 ---
 
@@ -120,7 +120,7 @@ Best for: Backend automation, internal tools, scheduled workflows
 ### Sender Identities / `onBehalfOf` (multi-tenant SaaS)
 Covered in full in the section below. Best for: SaaS apps where customers don't need their own BoldSign account but documents should appear sent from their identity.
 
-**Region config:** US = default `https://api.boldsign.com`, EU = `https://eu-api.boldsign.com`
+**Region config:** US = default `https://api.boldsign.com`, EU = `https://api-eu.boldsign.com`
 
 
 ## Document Send — Critical Facts

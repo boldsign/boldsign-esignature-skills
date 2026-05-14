@@ -26,7 +26,7 @@ $config = Configuration::getDefaultConfiguration()
 
 // EU region
 $config = Configuration::getDefaultConfiguration()
-    ->setHost('https://eu-api.boldsign.com')
+    ->setHost('https://api-eu.boldsign.com')
     ->setApiKey('X-API-KEY', getenv('BOLDSIGN_API_KEY'));
 
 // OAuth Bearer Token
