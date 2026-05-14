@@ -30,7 +30,7 @@ configuration = boldsign.Configuration(access_token="Your-Bearer-Token-Here")
 
 ### Region‑specific Base URL (EU Example)
 ```python
-configuration = boldsign.Configuration(api_key = "Your-API-Key-Here", host = "https://eu-api.boldsign.com")
+configuration = boldsign.Configuration(api_key = "Your-API-Key-Here", host = "https://api-eu.boldsign.com")
 ```
 
 ### Create API Clients
