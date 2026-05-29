@@ -160,6 +160,11 @@ public class BoldSignWebhookController : ControllerBase
         var body = await reader.ReadToEndAsync();
 
         // 2. Verify HMAC signature
+        if (Request.Headers[WebhookUtility.BoldSignEventHeader] == "Verification")
+        {
+            return Ok();
+        }
+
         var secret = Environment.GetEnvironmentVariable("BOLDSIGN_WEBHOOK_SECRET");
         try
         {
