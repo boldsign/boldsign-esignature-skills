@@ -57,19 +57,17 @@ public async Task<string> SendDocumentAsync()
     };
 
     // Define signature field
-    var bounds = new Rectangle { X = 100, Y = 200, Width = 200, Height = 50 };
-    var signatureField = new FormField
-    {
-        FieldType = FieldType.Signature,
-        PageNumber = 1,
-        Bounds = bounds,
-        IsRequired = true
-    };
+    var signatureField = new FormField(
+        id: "signature1",
+        isRequired: true,
+        type: FieldType.Signature,
+        pageNumber: 1,
+        bounds: new Rectangle(x: 100, y: 200, width: 200, height: 50));
 
     // Define signer
     var signer = new DocumentSigner(
-        name: "John Doe",
-        emailAddress: "john@example.com",
+        signerName: "John Doe",
+        signerEmail: "john@example.com",
         signerType: SignerType.Signer,
         formFields: new List<FormField> { signatureField }
     );
@@ -147,6 +145,8 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BoldSign.Api;
+using BoldSign.Model.Webhook;
 
 [ApiController]
 [Route("webhooks")]
@@ -160,12 +160,24 @@ public class BoldSignWebhookController : ControllerBase
         var body = await reader.ReadToEndAsync();
 
         // 2. Verify HMAC signature
-        var signature = Request.Headers["X-BoldSign-Signature"].ToString();
-        var secret = Environment.GetEnvironmentVariable("BOLDSIGN_WEBHOOK_SECRET");
-        var expectedSig = ComputeHmac(body, secret);
+        if (Request.Headers[WebhookUtility.BoldSignEventHeader] == "Verification")
+        {
+            return Ok();
+        }
 
-        if (signature != expectedSig)
+        var secret = Environment.GetEnvironmentVariable("BOLDSIGN_WEBHOOK_SECRET");
+        try
+        {
+            WebhookUtility.ValidateSignature(
+                body,
+                Request.Headers["X-BoldSign-Signature"],
+                secret
+            );
+        }
+        catch (BoldSignSignatureException)
+        {
             return Unauthorized();
+        }
 
         // 3. Parse and handle
         var payload = JsonSerializer.Deserialize<JsonElement>(body);
@@ -186,15 +198,6 @@ public class BoldSignWebhookController : ControllerBase
         }
 
         return Ok();
-    }
-
-    private string ComputeHmac(string message, string secret)
-    {
-        var keyBytes = Encoding.UTF8.GetBytes(secret);
-        var messageBytes = Encoding.UTF8.GetBytes(message);
-        using var hmac = new HMACSHA256(keyBytes);
-        var hash = hmac.ComputeHash(messageBytes);
-        return Convert.ToHexString(hash).ToLower();
     }
 
     private async Task HandleCompleted(string documentId)
@@ -221,7 +224,7 @@ public class BoldSignWebhookController : ControllerBase
 ```csharp
 public DocumentProperties GetStatus(string documentId)
 {
-    var details = documentClient.GetDocumentProperties(documentId);
+    var details = documentClient.GetProperties(documentId);
     Console.WriteLine($"Status: {details.Status}"); // InProgress, Completed, Declined
     return details;
 }
