@@ -22,12 +22,12 @@ use BoldSign\Configuration;
 
 // API Key auth
 $config = Configuration::getDefaultConfiguration()
-    ->setApiKey('X-API-KEY', getenv('BOLDSIGN_API_KEY'));
+    ->setApiKey(getenv('BOLDSIGN_API_KEY'));
 
 // EU region
 $config = Configuration::getDefaultConfiguration()
     ->setHost('https://api-eu.boldsign.com')
-    ->setApiKey('X-API-KEY', getenv('BOLDSIGN_API_KEY'));
+    ->setApiKey(getenv('BOLDSIGN_API_KEY'));
 
 // OAuth Bearer Token
 $config = Configuration::getDefaultConfiguration()
@@ -91,18 +91,17 @@ function sendDocument(DocumentApi $documentApi): string
 
 ```php
 use BoldSign\Model\SendForSignFromTemplate;
-use BoldSign\Model\Roles;
+use BoldSign\Model\Role;
 
 function sendFromTemplate(TemplateApi $templateApi, string $templateId): string
 {
-    $role = new Roles([
+    $role = new Role([
         'role_index' => 1,
         'signer_name' => 'Jane Smith',
         'signer_email' => 'jane@example.com',
     ]);
 
-    $sendRequest = new SendForSignFromTemplate([
-        'template_id' => $templateId,
+    $sendRequest = new SendForSignFromTemplateForm([
         'title' => 'Contract for Jane',
         'roles' => [$role],
     ]);
@@ -125,7 +124,7 @@ function getEmbeddedSignLink(DocumentApi $documentApi, string $documentId, strin
         $documentId,
         $signerEmail,
         null,   // countryCode
-        null,   // sendSMS
+        null,   // phoneNumber
         $expiry,
         'https://yourapp.com/signing-complete'
     );
@@ -171,6 +170,12 @@ switch ($eventType) {
     case 'Declined':
         error_log("Declined: $documentId");
         break;
+    case 'Verification':
+        $token = $payload['event']['id'] ?? $payload['event']['verificationToken'] ?? '';
+        http_response_code(200);
+        header('Content-Type: application/json');
+        echo json_encode(['verificationToken' => $token]);
+        exit;
 }
 
 http_response_code(200);
@@ -217,6 +222,9 @@ class BoldSignWebhookController extends Controller
         match($eventType) {
             'Completed' => $this->handleCompleted($payload),
             'SendFailed' => Log::error('BoldSign send failed', $payload),
+            'Verification' => response()->json([
+                'verificationToken' => $payload['event']['id'] ?? $payload['event']['verificationToken'] ?? ''
+            ]),
             default => null,
         };
 
@@ -254,9 +262,7 @@ function onboardTenant(SenderIdentitiesApi $api, string $name, string $email): v
     $api->createSenderIdentities($createRequest);
 
     // Step 2: Send approval email to tenant
-    $approvalRequest = new ResendSenderIdentityRequest();
-    $approvalRequest->setEmail($email);
-    $api->requestForIdentityApproval($approvalRequest);
+    $api->resendInvitationSenderIdentities($email);
     // Tenant clicks Approve in email → SenderIdentityApproved webhook fires
 }
 
