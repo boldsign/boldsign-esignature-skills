@@ -79,10 +79,10 @@ def send_document():
 
 ## 4. Send Document Using a Template
 ```python
-from boldsign import SendForSignFromTemplate, Roles
+from boldsign import SendForSignFromTemplate, Role
 
 def send_from_template(template_id: str):
-    role = Roles(
+    role = Role(
         roleIndex=1,
         signerName="Jane Smith",
         signerEmail="jane@example.com"
@@ -211,9 +211,7 @@ def onboard_tenant(name: str, email: str):
         CreateSenderIdentityRequest(name=name, email=email)
     )
     # Step 2: Send approval email to tenant
-    sender_api.request_for_identity_approval(
-        ResendSenderIdentityRequest(email=email)
-    )
+    sender_api.resend_invitation_sender_identities(email=email)
     # Tenant clicks Approve in email → SenderIdentityApproved webhook fires
 
 def send_on_behalf_of(tenant_email: str, title: str, signer, file_path: str):
