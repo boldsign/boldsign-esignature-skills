@@ -208,11 +208,21 @@ public class BoldSignWebhookController : ControllerBase
 
         // Download signed PDF
         var pdf = documentClient.DownloadDocument(documentId);
-        await System.IO.File.WriteAllBytesAsync($"signed/{documentId}.pdf", pdf);
+        Directory.CreateDirectory("signed");
+        var pdfPath = Path.Combine("signed", $"{documentId}.pdf");
+        await using (var pdfStream = File.Create(pdfPath))
+        {
+            await pdf.CopyToAsync(pdfStream);
+        }
 
         // Download audit trail
         var audit = documentClient.DownloadAuditLog(documentId);
-        await System.IO.File.WriteAllBytesAsync($"signed/{documentId}-audit.pdf", audit);
+        Directory.CreateDirectory("signed");
+        var auditPath = Path.Combine("signed", $"{documentId}-audit.pdf");
+        await using (var auditStream = File.Create(auditPath))
+        {
+            await audit.CopyToAsync(auditStream);
+        }
     }
 }
 ```
