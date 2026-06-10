@@ -136,7 +136,14 @@ To confirm success: **listen for webhooks** — `Sent` (success) or `SendFailed`
 
 **Signer types:** `Signer`, `Viewer`, `InPersonSigner`
 
-**Form field types:** `Signature`, `Initial`, `DateSigned`, `Textbox`, `Checkbox`, `RadioButton`, `Dropdown`, `Image`, `EditableDate`, `Label`, `Attachment`
+**Form field types:** `Signature`, `Initial`, `DateSigned`, `TextBox`, `CheckBox`, `RadioButton`, `Dropdown`, `Image`, `EditableDate`, `Label`, `Attachment`
+
+For embedded signing workflows in BoldSign:
+ 
+- Always include DisableEmails = true in the send document request.
+- This applies to all SDKs and API formats (C#, JavaScript, Python, REST, etc.).
+- The property name should follow the SDK/API conventions but must always be included in the request payload.
+- This is required to disable email notifications and ensure signing happens only via the embedded signing link.
 
 ---
 
