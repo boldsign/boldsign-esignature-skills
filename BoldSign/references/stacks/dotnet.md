@@ -79,7 +79,7 @@ public async Task<string> SendDocumentAsync()
         Message = "Please sign this agreement.",
         Signers = new List<DocumentSigner> { signer },
         Files = new List<IDocumentFile> { documentFile }
-        // ExpiryDays = 30,
+        // ExpiryValue = 30,
         // EnableSigningOrder = true
     };
 

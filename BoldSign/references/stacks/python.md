@@ -79,7 +79,7 @@ def send_document():
 
 ## 4. Send Document Using a Template
 ```python
-from boldsign import SendForSignFromTemplate, Role
+from boldsign import SendForSignFromTemplateForm, Role
 
 def send_from_template(template_id: str):
     role = Role(
@@ -88,7 +88,7 @@ def send_from_template(template_id: str):
         signerEmail="jane@example.com"
     )
 
-    request = SendForSignFromTemplate(
+    request = SendForSignFromTemplateForm(
         roles=[role]
     )
 
