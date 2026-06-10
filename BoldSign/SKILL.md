@@ -141,7 +141,7 @@ To confirm success: **listen for webhooks** — `Sent` (success) or `SendFailed`
 For embedded signing workflows in BoldSign:
  
 - Always include DisableEmails = true in the send document request.
-- This applies to all SDKs and API formats (C#, JavaScript, Python, REST, etc.).
+- This applies to all SDKs and API formats (C#, Node.js, Python, Java, etc.).
 - The property name should follow the SDK/API conventions but must always be included in the request payload.
 - This is required to disable email notifications and ensure signing happens only via the embedded signing link.
 
