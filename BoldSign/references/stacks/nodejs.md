@@ -85,23 +85,22 @@ async function sendDocument() {
 ## Send from Template
 
 ```typescript
-import { TemplateApi, SendForSignFromTemplate, Roles } from 'boldsign';
+import { TemplateApi, SendForSignFromTemplateForm, Role } from 'boldsign';
 
 const templateApi = new TemplateApi();
 templateApi.setApiKey(process.env.BOLDSIGN_API_KEY!);
 
 async function sendFromTemplate(templateId: string) {
-  const role = new Roles();
+  const role = new Role();
   role.roleIndex = 1;
   role.signerName = 'Jane Smith';
   role.signerEmail = 'jane@example.com';
 
-  const sendRequest = new SendForSignFromTemplate();
-  sendRequest.templateId = templateId;
+  const sendRequest = new SendForSignFromTemplateForm();
   sendRequest.title = 'Contract for Jane Smith';
   sendRequest.roles = [role];
 
-  const result = await templateApi.sendUsingTemplate(sendRequest);
+  const result = await templateApi.sendUsingTemplate(templateId, sendRequest);
   return result.documentId;
 }
 ```
@@ -120,8 +119,8 @@ async function getEmbeddedSignLink(documentId: string, signerEmail: string) {
   const result = await documentApi.getEmbeddedSignLink(
     documentId,
     signerEmail,
-    null,           // countryCode (optional, for SMS OTP)
-    null,           // sendSMS
+    undefined,           // countryCode (optional, for SMS OTP)
+    undefined,           // phoneNumber
     signLinkExpiry, // signLinkValidTill
     'https://yourapp.com/signing-complete' // redirectUrl after signing
   );
@@ -154,7 +153,7 @@ async function createEmbeddedSendRequest() {
   embeddedRequest.showSendButton = true;
   embeddedRequest.redirectUrl = 'https://yourapp.com/sent-complete';
 
-  const result = await documentApi.createEmbeddedRequestUrl(embeddedRequest);
+  const result = await documentApi.createEmbeddedRequestUrlDocument(embeddedRequest);
   return result.sendUrl; // load in <iframe>
 }
 ```
@@ -171,7 +170,15 @@ const app = express();
 app.use(express.raw({ type: 'application/json' })); // raw body needed for HMAC
 
 app.post('/webhooks/boldsign', (req, res) => {
-  // 1. Verify HMAC signature
+  const payload = JSON.parse(req.body.toString());
+  const eventType: string = payload.event.eventType;
+
+  // Respond immediately to BoldSign's URL verification ping (no HMAC needed)
+  if (eventType === 'Verification') {
+    return res.status(200).send('OK');
+  }
+
+  // Verify HMAC signature for all other events
   const signature = req.headers['x-boldsign-signature'] as string;
   const secret = process.env.BOLDSIGN_WEBHOOK_SECRET!;
   const expectedSig = crypto
@@ -183,9 +190,6 @@ app.post('/webhooks/boldsign', (req, res) => {
     return res.status(401).send('Invalid signature');
   }
 
-  // 2. Parse and handle event
-  const payload = JSON.parse(req.body.toString());
-  const { eventType } = payload.event;
   const { documentId, status } = payload.document;
 
   switch (eventType) {
@@ -225,7 +229,7 @@ async function handleDocumentComplete(documentId: string) {
 
 ```typescript
 async function getDocumentStatus(documentId: string) {
-  const details = await documentApi.getDocumentProperties(documentId);
+  const details = await documentApi.getProperties(documentId);
   console.log('Status:', details.status); // Draft, InProgress, Completed, Declined, Expired
   console.log('Signers:', details.signerDetails);
   return details;
@@ -257,7 +261,7 @@ senderApi.setApiKey(process.env.BOLDSIGN_API_KEY!);
 // Step 1: Register identity
 async function registerTenantIdentity(name: string, email: string) {
   await senderApi.createSenderIdentities({ name, email });
-  await senderApi.requestForIdentityApproval({ email });
+  await senderApi.resendInvitationSenderIdentities(email);
   // Tenant gets approval email — wait for SenderIdentityApproved webhook
 }
 
