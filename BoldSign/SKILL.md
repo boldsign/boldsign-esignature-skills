@@ -120,7 +120,9 @@ Best for: Backend automation, internal tools, scheduled workflows
 ### Sender Identities / `onBehalfOf` (multi-tenant SaaS)
 Covered in full in the section below. Best for: SaaS apps where customers don't need their own BoldSign account but documents should appear sent from their identity.
 
-**Region config:** US = default `https://api.boldsign.com`, EU = `https://api-eu.boldsign.com`
+**Region config:** US = default `https://api.boldsign.com`, EU = `https://api-eu.boldsign.com`, CA = `https://api-ca.boldsign.com`, AU = `https://api-au.boldsign.com`. A key used against the wrong region's host gets `401` on every call.
+
+**Confirm the key and region first:** make one read-only call, for example `GET /v1/brand/list`, before building. `200` means the key and base URL match.
 
 
 ## Document Send — Critical Facts
@@ -132,7 +134,9 @@ To confirm success: **listen for webhooks** — `Sent` (success) or `SendFailed`
 **Minimum required fields:**
 - `Files` (multipart) or `FileUrls` (JSON)
 - At least one signer with `name`, `emailAddress`, `signerType`
-- At least one `formField` with `fieldType`, `pageNumber`, `bounds`
+- Fields for each signer: either `formFields` with `fieldType`, `pageNumber`, `bounds`, **or** text tags in the document with `useTextTags: true` (no `formFields` needed; see Text Tags)
+
+⚠️ **The next call can fail for a few seconds after a send.** Right after `/v1/document/send`, `getEmbeddedSignLink` and `properties` can return `403 {"error":"Invalid Document ID"}` while the document is processing; the same call succeeds seconds later. Retry a `400` or `403` briefly (for example 3 to 5 tries, 2 to 3 seconds apart) before treating it as an error.
 
 **Signer types:** `Signer`, `Viewer`, `InPersonSigner`
 
@@ -152,7 +156,7 @@ For embedded signing workflows in BoldSign:
 All async operations require webhooks to confirm status.  
 BoldSign retries webhook delivery for **up to 8 hours** if your server is down.
 
-**Setup:** BoldSign App → Settings → Webhooks → Add webhook URL
+**Setup:** BoldSign App → API → Webhooks → Create webhook (account-level), or API → OAuth Apps → your app (app-level). Copy the webhook's signing secret with **Reveal**. To receive webhooks on a local machine, expose it with a tunnel, for example `cloudflared tunnel --url http://localhost:3000`, and register that HTTPS URL.
 
 **Two types:**
 - **Account-level** — fires for all docs sent via web app or API
@@ -171,7 +175,18 @@ IdentityVerificationSucceeded/Failed       → ID verification outcome
 SenderIdentityApproved/Denied/Revoked      → Sender identity lifecycle
 ```
 
-**Security:** Always verify `X-BoldSign-Signature` HMAC SHA-256 before processing.
+**Security: verify every event before trusting it** (docs: https://developers.boldsign.com/webhooks/verify-webhook-events/)
+
+1. **Verification ping:** when a webhook is added, BoldSign sends a request with header `X-BoldSign-Event: Verification`. Return `200` and do nothing else. It is identified by the **header**, not the body.
+2. **Raw body:** read the request body as raw bytes, exactly as sent. Do not parse and re-serialise the JSON first, or the signature will not match.
+3. **Header format:** `X-BoldSign-Signature: t=<unix seconds>, s0=<hex>[, s1=<hex>]`. `s1` appears only while an old secret is still valid after the secret is rolled.
+4. **Expected signature:** `hex(HMAC_SHA256(key = webhook secret, message = t + "." + rawBody))`. The timestamp is part of the signed message; an HMAC of the body alone never matches.
+5. **Compare** the expected value with `s0` and `s1` using a constant-time comparison (`crypto.timingSafeEqual`, `hmac.compare_digest`, `hash_equals`), never `==`/`!==` and never against the whole header string.
+6. **Reject old events:** reject if `|now - t|` is more than 300 seconds (replay protection).
+7. Only then parse the JSON. **Event metadata is in `event`** (`event.id`, `event.eventType`, `event.created`, `event.environment`: `Test` for sandbox or `Live`) and **the subject of the event is in `data`**: `data.object` says what it is (`"document"`, `"template"`, `"senderIdentity"`, `"identityVerification"`), then for a document `data.documentId`, `data.status`, `data.signerDetails`, and for a sender identity `data.email`, `data.status`. Read `data`, as the documented sample payloads do; do not rely on a top-level `document` property.
+8. Return `401` (or `400`) for any failed check without changing anything. De-duplicate by `event.id`, and ignore an event older than the last one applied for that document.
+
+The .NET SDK's `WebhookUtility.ValidateSignature` implements steps 3 to 6. The Node SDK has the same helper in `boldsign/dist/WebhookUtility` (not exported from the package root); wrap it in `try/catch`, because a signature of the wrong length makes it throw a non-signature error.
 
 ---
 
@@ -202,16 +217,25 @@ Body: { templateId, title, roles: [{ roleIndex, signerName, signerEmail }] }
 
 ## Text Tags
 
-Embed invisible text tags in your Word/PDF to auto-place fields — no x/y coordinates:
+Put text tags in your Word/PDF to place fields, with no x/y coordinates, and send with **`useTextTags: true`** (docs: https://developers.boldsign.com/text-tags/introduction/).
+
+Syntax: `{{fieldType|signerIndex|required|label|fieldId}}`. Only the first two parts are required; the signer index starts at 1; `*` marks the field required.
 
 ```
-{{:sign:signer1}}       → Signature field for signer1
-{{:initial:signer1}}    → Initials field
-{{:date:signer1}}       → Date signed
-{{:textbox:signer1}}    → Text input
+{{sign|1|*}}                       → Signature for signer 1, required
+{{init|1|*}}                       → Initials
+{{date|1|*}}                       → Date signed (filled automatically)
+{{text|1|*|Enter name|full_name}}  → Text box with a placeholder and a field ID
+{{editdate|1|*|dd/MM/yyyy}}        → Editable date with a format
 ```
 
-BoldSign auto-converts these to real fields on upload.
+Field types: `text` (Textbox), `sign` (Signature), `init` (Initial), `date` (Date signed), `editdate` (Editable date), `title`, `company`. Checkboxes and radio buttons need definition tags (`textTagDefinitions`).
+
+- **Size:** add spaces inside the braces to widen a field (`{{sign|1|*          }}`); a larger font makes it taller.
+- **Hidden tags:** draw the tag text in white so it does not show on the signed PDF.
+- BoldSign converts the tags to real fields when it processes the document.
+
+**If you use `bounds` instead:** coordinates are measured from the top-left of the page in pixels at 96 per inch, not PDF points (1 point = 1.333 px). Fields placed with point values land too high and too far left. Text tags avoid this.
 
 ---
 
@@ -233,6 +257,11 @@ BoldSign auto-converts these to real fields on upload.
 
 - ❌ Polling for document status instead of using webhooks (wastes your rate limit)
 - ❌ Not verifying webhook HMAC signatures
+- ❌ Computing the HMAC over the body alone, or comparing it with the whole `X-BoldSign-Signature` header: the signed message is `t + "." + rawBody` and the header carries `t`, `s0` and `s1`
+- ❌ Parsing the JSON (or letting a framework parse it) before verifying: verification needs the raw bytes
+- ❌ Reading `payload.document`: the documented payload puts the document in `payload.data` (check `data.object`)
+- ❌ Detecting the verification ping from the body: use the `X-BoldSign-Event: Verification` header
+- ❌ Treating a `403 Invalid Document ID` straight after a send as final: retry briefly
 - ❌ Not handling `SendFailed` events — documents may silently fail
 - ❌ Using `application/json` for file uploads — must use `multipart/form-data`
 - ❌ Hardcoding API keys — use environment variables
@@ -245,6 +274,24 @@ BoldSign auto-converts these to real fields on upload.
 ---
 
 
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `401` on every call | Wrong API key, or the base URL is for another region | Check the key; call `GET /v1/brand/list` on each regional host; use the one that returns `200` |
+| `403 {"error":"Invalid Document ID"}` right after a send (from `getEmbeddedSignLink` or `properties`) | The document is still processing | Retry briefly (a few seconds); in testing it cleared within about 3 seconds |
+| `400 {"error":"Invalid template id."}` right after creating a template | The template is still processing | Retry briefly, or wait for the `TemplateCreated` webhook |
+| `403` still returned minutes later for a document your key sent | The send failed, or the key cannot read that document (another account, environment or team) | Check for a `SendFailed` event and the document in the BoldSign web app; make sure the key comes from the account and environment (Sandbox or Live) you are looking at |
+| Your own webhook endpoint returns `401` for real BoldSign events | The body was parsed and re-serialised before the HMAC check, the wrong secret is configured (each webhook has its own, see **Reveal**), or the server clock is off by more than 5 minutes | Verify the raw body; copy the secret from that webhook; check the clock |
+| A webhook never arrives for a document | The webhook was added after the event, or the URL is not public HTTPS | BoldSign does not replay events from before the webhook existed; use a tunnel for local testing; check delivery status in API → Webhooks |
+| Fields appear in the wrong place | `bounds` given in PDF points | Use pixels (96 per inch), or text tags |
+| `429 Too Many Requests` | Sandbox allows 50 requests per hour per account | Back off using `Retry-After`; use webhooks instead of polling |
+| A signer gets no email | `disableEmails: true` (embedded signing), or a bounced address | For embedded signing this is expected; use `<anyname>@boldsign.dev` addresses for test signers |
+
+For agent and integration testing, use a dedicated developer sandbox account (https://account.boldsign.com/signup?planId=1076), so test documents, rate limits and list results are not shared with other users.
+
+---
 
 ## Key API Endpoints
 
