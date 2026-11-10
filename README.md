@@ -72,3 +72,7 @@ Adjust the target path if your AI agent environment uses a different skills dire
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Starter recipes
+
+Tested starter apps for Node.js and Express (send a document, embedded signing, send from a template) are in [recipes/nodejs-express](recipes/nodejs-express/).
