@@ -25,8 +25,18 @@ documentApi.setApiKey(process.env.BOLDSIGN_API_KEY!);
 // OAuth Bearer Token auth
 documentApi.setAccessToken(process.env.BOLDSIGN_ACCESS_TOKEN!);
 
-// EU region — set base path
-documentApi.basePath = 'https://api-eu.boldsign.com';
+// Non-US region: set the base path (or pass it to the constructor: new DocumentApi('https://api-eu.boldsign.com'))
+documentApi.basePath = 'https://api-eu.boldsign.com'; // EU; CA: https://api-ca.boldsign.com, AU: https://api-au.boldsign.com
+```
+
+Confirm the key and region with one read-only call before building anything:
+
+```typescript
+import { BrandingApi } from 'boldsign';
+
+const brandingApi = new BrandingApi(process.env.BOLDSIGN_BASE_URL ?? 'https://api.boldsign.com');
+brandingApi.setApiKey(process.env.BOLDSIGN_API_KEY!);
+await brandingApi.brandList(); // throws with status 401 if the key or region is wrong
 ```
 
 ---
@@ -78,6 +88,49 @@ async function sendDocument() {
   // NOTE: Document is still processing — use webhooks to confirm Sent status
   return result.documentId;
 }
+```
+
+### Send with text tags (no coordinates, no template)
+
+When the PDF contains text tags such as `{{sign|1|*}}` and `{{date|1|*}}` (see Text Tags in SKILL.md), set `useTextTags` and leave out `formFields`:
+
+```typescript
+async function sendWithTextTags(pdfPath: string, name: string, email: string) {
+  const signer = new DocumentSigner();
+  signer.name = name;
+  signer.emailAddress = email;
+  signer.signerType = DocumentSigner.SignerTypeEnum.Signer;
+
+  const sendRequest = new SendForSign();
+  sendRequest.title = 'Policy acknowledgement';
+  sendRequest.signers = [signer];
+  sendRequest.files = [fs.createReadStream(pdfPath)];
+  sendRequest.useTextTags = true;
+  // Embedded signing only: sendRequest.disableEmails = true;
+
+  const { documentId } = await documentApi.sendDocument(sendRequest);
+  return documentId;
+}
+```
+
+### Retry the first call after a send
+
+The document is processed asynchronously, so the next call on it (for example `getEmbeddedSignLink`) can return `403 Invalid Document ID` for a few seconds:
+
+```typescript
+async function retrySoon<T>(fn: () => Promise<T>, tries = 5): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const status = err?.statusCode ?? err?.response?.status; // SDK HttpError or Axios error
+      if (i >= tries || (status !== 400 && status !== 403)) throw err;
+      await new Promise((r) => setTimeout(r, 2000 * i));
+    }
+  }
+}
+
+const link = await retrySoon(() => documentApi.getEmbeddedSignLink(documentId, email));
 ```
 
 ---
@@ -162,35 +215,53 @@ async function createEmbeddedSendRequest() {
 
 ## Webhook Handler (Express)
 
+The signature is `t=<unix seconds>, s0=<hex>[, s1=<hex>]`, computed as HMAC SHA256 over `t + "." + rawBody` (see Webhooks in SKILL.md). Mount the route with `express.raw` **before** any `express.json()`, so the body stays as raw bytes.
+
 ```typescript
 import express from 'express';
 import crypto from 'crypto';
 
-const app = express();
-app.use(express.raw({ type: 'application/json' })); // raw body needed for HMAC
+const TOLERANCE_SECONDS = 300;
 
-app.post('/webhooks/boldsign', (req, res) => {
-  const payload = JSON.parse(req.body.toString());
-  const eventType: string = payload.event.eventType;
-
-  // Respond immediately to BoldSign's URL verification ping (no HMAC needed)
-  if (eventType === 'Verification') {
-    return res.status(200).send('OK');
+// Returns true only for an event signed with this webhook's secret, within the time tolerance.
+export function verifyBoldSignSignature(rawBody: Buffer, header: string | undefined, secret: string): boolean {
+  if (!header || !secret) return false;
+  let t = '';
+  const signatures: string[] = [];
+  for (const part of header.split(',')) {
+    const i = part.indexOf('=');
+    if (i < 0) return false;
+    const key = part.slice(0, i).trim();
+    const value = part.slice(i + 1).trim();
+    if (key === 't') t = value;
+    else if (/^s\d+$/.test(key)) signatures.push(value.toLowerCase());
   }
+  if (!/^\d+$/.test(t) || signatures.length === 0) return false;
+  if (Math.abs(Math.floor(Date.now() / 1000) - Number(t)) > TOLERANCE_SECONDS) return false;
 
-  // Verify HMAC signature for all other events
-  const signature = req.headers['x-boldsign-signature'] as string;
-  const secret = process.env.BOLDSIGN_WEBHOOK_SECRET!;
-  const expectedSig = crypto
-    .createHmac('sha256', secret)
-    .update(req.body)
-    .digest('hex');
+  const expected = crypto.createHmac('sha256', secret)
+    .update(Buffer.concat([Buffer.from(`${t}.`), rawBody]))
+    .digest();
+  return signatures.some((sig) => {
+    if (!/^[0-9a-f]{64}$/.test(sig)) return false; // also keeps timingSafeEqual lengths equal
+    return crypto.timingSafeEqual(Buffer.from(sig, 'hex'), expected);
+  });
+}
 
-  if (signature !== expectedSig) {
+const app = express();
+
+app.post('/webhooks/boldsign', express.raw({ type: '*/*' }), (req, res) => {
+  // BoldSign's URL check when the webhook is added: identified by the header, answered with 200
+  if (req.get('X-BoldSign-Event') === 'Verification') return res.sendStatus(200);
+
+  if (!verifyBoldSignSignature(req.body, req.get('X-BoldSign-Signature'), process.env.BOLDSIGN_WEBHOOK_SECRET!)) {
     return res.status(401).send('Invalid signature');
   }
 
-  const { documentId, status } = payload.document;
+  const payload = JSON.parse(req.body.toString('utf8')); // parse only after verifying
+  const eventType: string = payload.event.eventType;      // event metadata: event.id, event.created, event.environment
+  if (payload.data?.object !== 'document') return res.sendStatus(200);
+  const { documentId } = payload.data;                    // the document is in data, not document
 
   switch (eventType) {
     case 'Completed':
@@ -204,12 +275,14 @@ app.post('/webhooks/boldsign', (req, res) => {
       console.log(`Document ${documentId} was declined`);
       break;
     case 'SendFailed':
-      console.error(`Send failed for ${documentId}:`, payload.document);
+      console.error(`Send failed for ${documentId}:`, payload.data.errorMessage);
       break;
   }
 
   res.status(200).send('OK');
 });
+
+app.use(express.json()); // other routes, after the webhook route
 
 async function handleDocumentComplete(documentId: string) {
   // Download signed PDF

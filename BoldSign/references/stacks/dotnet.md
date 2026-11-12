@@ -182,7 +182,10 @@ public class BoldSignWebhookController : ControllerBase
         // 3. Parse and handle
         var payload = JsonSerializer.Deserialize<JsonElement>(body);
         var eventType = payload.GetProperty("event").GetProperty("eventType").GetString();
-        var documentId = payload.GetProperty("document").GetProperty("documentId").GetString();
+        // The event's subject is in "data"; data.object says what it is ("document", "senderIdentity", ...)
+        var data = payload.GetProperty("data");
+        if (data.GetProperty("object").GetString() != "document") return Ok();
+        var documentId = data.GetProperty("documentId").GetString();
 
         switch (eventType)
         {

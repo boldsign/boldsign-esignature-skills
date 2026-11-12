@@ -123,29 +123,32 @@ def get_embedded_signing_link(document_id: str, signer_email: str) -> str:
 from flask import Flask, request, abort
 import hmac
 import hashlib
+import json
 import os
 
 app = Flask(__name__)
 
 @app.route("/webhooks/boldsign", methods=["POST"])
 def boldsign_webhook():
-    signature_header = request.headers.get("X-BoldSign-Signature", "")
-    raw_body = request.data.decode("utf-8")
+    # BoldSign's URL check when the webhook is added: identified by the header, answered with 200
+    if request.headers.get("X-BoldSign-Event") == "Verification":
+        return "", 200
 
-    payload = request.json
-    event_type = payload["event"]["eventType"]
-    document_id = payload["document"]["documentId"]
-    if event_type == "Verification":
-        return "OK", 200
-
-    signature_header = request.headers.get("X-BoldSign-Signature", "")
-    if not verify_signature(signature_header, raw_body):
+    raw_body = request.get_data()  # raw bytes, exactly as sent
+    if not verify_signature(request.headers.get("X-BoldSign-Signature", ""), raw_body):
         abort(401)
+
+    payload = json.loads(raw_body)          # parse only after verifying
+    event_type = payload["event"]["eventType"]
+    data = payload.get("data") or {}        # the document is in data, not document
+    if data.get("object") != "document":
+        return "", 200
+    document_id = data["documentId"]
 
     if event_type == "Completed":
         handle_completed(document_id)
     elif event_type == "SendFailed":
-        print(f'Send failed: {payload["document"]}')
+        print(f'Send failed: {document_id} {data.get("errorMessage")}')
     elif event_type == "Declined":
         print(f'Declined: {document_id}')
 
@@ -153,23 +156,35 @@ def boldsign_webhook():
 ```
 
 ### Signature Verification Helper
+
+The header is `t=<unix seconds>, s0=<hex>[, s1=<hex>]` and the signature is HMAC SHA256 over `t + "." + raw body`. Check both `s0` and `s1` (`s1` is present while an old secret is still valid) and reject events older than 5 minutes.
+
 ```python
-def verify_signature(header: str, body: str) -> bool:
-    secret = os.environ["BOLDSIGN_WEBHOOK_SECRET"]
-    parts = dict(item.split("=") for item in header.replace(" ", "").split(","))
+import json
+import time
 
-    timestamp = parts.get("t")
-    signature = parts.get("s0")
+TOLERANCE_SECONDS = 300
 
-    signed_payload = f"{timestamp}.{body}"
+def verify_signature(header: str, raw_body: bytes) -> bool:
+    secret = os.environ.get("BOLDSIGN_WEBHOOK_SECRET", "")
+    if not header or not secret:
+        return False
+    timestamp, signatures = "", []
+    for part in header.split(","):
+        key, sep, value = part.strip().partition("=")
+        if not sep:
+            return False
+        if key == "t":
+            timestamp = value
+        elif key.startswith("s"):
+            signatures.append(value.lower())
+    if not timestamp.isdigit() or not signatures:
+        return False
+    if abs(int(time.time()) - int(timestamp)) > TOLERANCE_SECONDS:
+        return False
 
-    expected = hmac.new(
-        secret.encode(),
-        signed_payload.encode(),
-        hashlib.sha256
-    ).hexdigest()
-
-    return hmac.compare_digest(signature, expected)
+    expected = hmac.new(secret.encode(), timestamp.encode() + b"." + raw_body, hashlib.sha256).hexdigest()
+    return any(hmac.compare_digest(sig, expected) for sig in signatures)
 ```
 
 ---

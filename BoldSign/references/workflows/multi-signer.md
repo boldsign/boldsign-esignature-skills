@@ -108,13 +108,13 @@ async function getSignerStatuses(documentId: string) {
 
 ## Webhook Events for Multi-Signer
 
-Multi-signer documents fire one `Signed` event per signer:
+Multi-signer documents fire one `Signed` event per signer. This runs inside the webhook handler, after the signature check (see "Webhook Handler (Express)" in `references/stacks/nodejs.md`); the document is in `payload.data`:
 
 ```typescript
 switch (eventType) {
   case 'Signed':
     // One signer completed — check who
-    const signerDetails = payload.document.signerDetails;
+    const signerDetails = payload.data.signerDetails;
     const justSigned = signerDetails.find(s => s.status === 'Completed');
     console.log(`${justSigned.signerName} has signed`);
     // If sequential, next signer will be automatically notified by BoldSign
@@ -122,12 +122,12 @@ switch (eventType) {
 
   case 'Completed':
     // ALL signers have signed — document is fully executed
-    await downloadAndStoreSignedDoc(payload.document.documentId);
+    await downloadAndStoreSignedDoc(payload.data.documentId);
     break;
 
   case 'Declined':
     // One signer declined — whole document halts
-    const declined = payload.document.signerDetails.find(s => s.declineMessage);
+    const declined = payload.data.signerDetails.find(s => s.declineMessage);
     console.log(`Declined by ${declined.signerName}: ${declined.declineMessage}`);
     break;
 }
