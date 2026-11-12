@@ -1,0 +1,18 @@
+{
+  "name": "boldsign-recipe-send-document",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BoldSign recipe: send a PDF for signature with text tags (no template), track status through a verified webhook.",
+  "type": "module",
+  "engines": { "node": ">=18.18" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "check:boldsign": "node scripts/check-boldsign.js",
+    "sample-pdf": "node scripts/make-sample-pdf.js"
+  },
+  "dependencies": {
+    "boldsign": "3.3.4",
+    "express": "4.22.3"
+  }
+}

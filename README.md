@@ -75,4 +75,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Starter recipes
 
-Tested starter apps for Python and Flask (send a document, embedded signing, send from a template) are in [recipes/python-flask](recipes/python-flask/).
+Tested starter apps (send a document, embedded signing, send from a template):
+
+- Node.js and Express: [recipes/nodejs-express](recipes/nodejs-express/).
+- Python and Flask: [recipes/python-flask](recipes/python-flask/).
