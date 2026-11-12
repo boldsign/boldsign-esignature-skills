@@ -79,3 +79,4 @@ Tested starter apps (send a document, embedded signing, send from a template):
 
 - Node.js and Express: [recipes/nodejs-express](recipes/nodejs-express/).
 - Python and Flask: [recipes/python-flask](recipes/python-flask/).
+- PHP: [recipes/php](recipes/php/).
