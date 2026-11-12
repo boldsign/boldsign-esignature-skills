@@ -332,16 +332,20 @@ function EmbeddedSignUI({ documentId, signerEmail }: { documentId: string; signe
 ## Part 4 — Webhook Handler for SaaS
 
 ```typescript
-app.post('/webhooks/boldsign', express.raw({ type: 'application/json' }), async (req, res) => {
-  // 1. Verify HMAC
-  const signature = req.headers['x-boldsign-signature'] as string;
-  const expected = crypto.createHmac('sha256', process.env.BOLDSIGN_WEBHOOK_SECRET!)
-    .update(req.body).digest('hex');
-  if (signature !== expected) return res.status(401).send('Invalid signature');
+// verifyBoldSignSignature: see "Webhook Handler (Express)" in references/stacks/nodejs.md
+// (HMAC SHA256 over t + "." + raw body, compared with s0/s1 in constant time, 300 s tolerance)
+app.post('/webhooks/boldsign', express.raw({ type: '*/*' }), async (req, res) => {
+  // 0. BoldSign's URL check when the webhook is added
+  if (req.get('X-BoldSign-Event') === 'Verification') return res.sendStatus(200);
 
-  const payload = JSON.parse(req.body.toString());
+  // 1. Verify the signature on the raw body, before parsing
+  if (!verifyBoldSignSignature(req.body, req.get('X-BoldSign-Signature'), process.env.BOLDSIGN_WEBHOOK_SECRET!)) {
+    return res.status(401).send('Invalid signature');
+  }
+
+  const payload = JSON.parse(req.body.toString('utf8'));
   const { eventType } = payload.event;
-  const doc = payload.document;
+  const doc = payload.data; // the event's subject; data.object says whether it is a document, sender identity, ...
 
   switch (eventType) {
     case 'Completed': {
@@ -372,11 +376,11 @@ app.post('/webhooks/boldsign', express.raw({ type: 'application/json' }), async 
       break;
 
     case 'SenderIdentityApproved':
-      await db.tenants.update(payload.senderIdentity?.email, { boldSignStatus: 'approved' });
+      await db.tenants.update(payload.data?.email, { boldSignStatus: 'approved' }); // data.object === 'senderIdentity'
       break;
 
     case 'SenderIdentityRevoked':
-      await db.tenants.update(payload.senderIdentity?.email, { boldSignStatus: 'revoked' });
+      await db.tenants.update(payload.data?.email, { boldSignStatus: 'revoked' });
       break;
   }
 

@@ -75,4 +75,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Starter recipes
 
-Tested starter apps for .NET and ASP.NET Core (send a document, embedded signing, send from a template) are in [recipes/dotnet](recipes/dotnet/).
+Tested starter apps (send a document, embedded signing, send from a template):
+
+- Node.js and Express: [recipes/nodejs-express](recipes/nodejs-express/).
+- .NET and ASP.NET Core: [recipes/dotnet](recipes/dotnet/).
