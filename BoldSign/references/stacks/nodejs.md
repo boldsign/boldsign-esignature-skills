@@ -3,12 +3,10 @@
 ## SDK Install
 
 ```bash
-npm install boldsign@3.3.4 --save-exact
+npm install boldsign
 # or
-yarn add boldsign@3.3.4 --exact
+yarn add boldsign
 ```
-
-Pin the exact version you tested with (3.3.4 is the version these examples were checked against), so a new SDK release cannot change behaviour unnoticed.
 
 Docs: https://developers.boldsign.com/sdks/node-sdk/
 
