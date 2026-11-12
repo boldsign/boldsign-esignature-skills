@@ -75,4 +75,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Starter recipes
 
-Tested starter apps for Node.js and Express (send a document, embedded signing, send from a template) are in [recipes/nodejs-express](recipes/nodejs-express/).
+Tested starter apps (send a document, embedded signing, send from a template):
+
+- Node.js and Express: [recipes/nodejs-express](recipes/nodejs-express/).
+- Python and Flask: [recipes/python-flask](recipes/python-flask/).
