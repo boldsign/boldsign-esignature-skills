@@ -1,0 +1,17 @@
+{
+  "name": "boldsign-recipe-send-from-template",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BoldSign recipe: send from a template, mapping each template role to a signer from your app; status through a verified webhook.",
+  "type": "module",
+  "engines": { "node": ">=18.18" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "check:boldsign": "node scripts/check-boldsign.js"
+  },
+  "dependencies": {
+    "boldsign": "3.3.4",
+    "express": "4.22.3"
+  }
+}
